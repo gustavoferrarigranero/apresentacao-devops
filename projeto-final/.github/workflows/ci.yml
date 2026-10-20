@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          coverage: none
+          extensions: pdo_sqlite
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: composer validate --strict
+      - run: composer install --no-interaction --prefer-dist
+      - run: npm ci
+      - run: cp .env.example .env && php artisan key:generate
+      - run: php artisan test --parallel
+      - run: vendor/bin/phpstan analyse --memory-limit=1G
+      - run: vendor/bin/pint --test
+      - run: npm run build
+      - run: composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+      - run: tar --exclude=.git --exclude=node_modules --exclude=.env --exclude=storage --exclude='database/*.sqlite' -czf "${RUNNER_TEMP}/clinicflow-${GITHUB_SHA}.tar.gz" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clinicflow-${{ github.sha }}
+          path: ${{ runner.temp }}/clinicflow-${{ github.sha }}.tar.gz
+          if-no-files-found: error
